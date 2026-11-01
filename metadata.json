@@ -1,0 +1,7 @@
+{
+  "name": "EVA AI",
+  "description": "Your Intelligent Assistant - Native Android AI Assistant foundation with premium design system and navigation",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
