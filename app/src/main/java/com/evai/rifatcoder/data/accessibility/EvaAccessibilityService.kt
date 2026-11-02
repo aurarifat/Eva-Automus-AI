@@ -124,6 +124,12 @@ class EvaAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return false
         val candidate = locateNode(root, targetText, targetId, targetDesc) ?: return false
 
+        val textToCheck = listOfNotNull(candidate.text, candidate.contentDescription, candidate.viewIdResourceName)
+            .joinToString(" ")
+        if (candidate.isPassword || AutomationSafetyGuard.isCredentialField(textToCheck)) {
+            return false
+        }
+
         // Attempt click on candidate or its clickable parent
         var current: AccessibilityNodeInfo? = candidate
         while (current != null) {
@@ -147,6 +153,12 @@ class EvaAccessibilityService : AccessibilityService() {
     ): Boolean {
         val root = rootInActiveWindow ?: return false
         val candidate = locateNode(root, targetText, targetId, targetDesc) ?: return false
+
+        val textToCheck = listOfNotNull(candidate.text, candidate.contentDescription, candidate.viewIdResourceName)
+            .joinToString(" ")
+        if (candidate.isPassword || AutomationSafetyGuard.isCredentialField(textToCheck)) {
+            return false
+        }
 
         var current: AccessibilityNodeInfo? = candidate
         while (current != null) {

@@ -52,4 +52,5 @@ data class VoiceUiState(
     val conversationId: String = "",
     val isPermissionGranted: Boolean = false,
     val isTtsSpeaking: Boolean = false,
+    val isIncognito: Boolean = false,
 )

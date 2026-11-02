@@ -189,20 +189,31 @@ class RealMemoryRepository(
         // Tokenize prompt into keywords supporting all Unicode letters (including Bengali) and digits
         val promptWords = prompt.lowercase(Locale.ROOT)
             .split(Regex("[^\\p{L}\\p{Nd}]+"))
-            .filter { it.length > 1 && it !in STOP_WORDS }
+            .filter { it.length >= 3 && it !in STOP_WORDS }
             .toSet()
 
-        // Score each memory based on genuine keyword matches
+        if (promptWords.isEmpty()) {
+            return@withContext emptyList()
+        }
+
+        // Score each memory based on genuine keyword and token matches
         val scored = allConfirmed.mapNotNull { memory ->
             val memContent = memory.value.lowercase(Locale.ROOT)
             val memCategory = memory.category.lowercase(Locale.ROOT)
             val memKey = memory.key.lowercase(Locale.ROOT)
 
+            val memTokens = (memContent + " " + memCategory + " " + memKey)
+                .split(Regex("[^\\p{L}\\p{Nd}]+"))
+                .filter { it.isNotEmpty() }
+                .toSet()
+
             var matchScore = 0
             for (word in promptWords) {
-                if (memContent.contains(word)) matchScore += 4
-                if (memKey.contains(word)) matchScore += 3
-                if (memCategory.contains(word)) matchScore += 2
+                if (memTokens.contains(word)) {
+                    matchScore += 4
+                } else if (word.length >= 4 && (memContent.contains(word) || memKey.contains(word))) {
+                    matchScore += 2
+                }
             }
 
             // Only include memories that genuinely relate to the prompt query
@@ -254,7 +265,8 @@ class RealMemoryRepository(
         private val STOP_WORDS = setOf(
             "the", "and", "this", "that", "with", "have", "from", "for", "are",
             "what", "when", "where", "which", "who", "whom", "will", "would",
-            "could", "should", "your", "about", "please", "help", "want", "like"
+            "could", "should", "your", "about", "please", "help", "want", "like",
+            "tell", "know", "show", "some", "them", "they", "then", "there"
         )
     }
 }

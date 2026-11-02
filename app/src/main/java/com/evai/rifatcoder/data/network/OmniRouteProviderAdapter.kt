@@ -35,6 +35,13 @@ class OmniRouteProviderAdapter(
         val cleanModel = modelId.trim().ifEmpty { "omni-default" }
         val rawBase = (baseUrl ?: "https://api.omniroute.ai/v1/").trim()
         val normalizedBase = if (rawBase.endsWith("/")) rawBase else "$rawBase/"
+
+        if (!normalizedBase.startsWith("https://", ignoreCase = true)) {
+            return@withContext Result.failure(
+                SecurityException("Insecure HTTP connections are prohibited. Please configure an HTTPS endpoint for OmniRoute.")
+            )
+        }
+
         val endpointUrl = "${normalizedBase}chat/completions"
 
         try {
@@ -151,11 +158,19 @@ class OmniRouteProviderAdapter(
         }
     }
 
+    private fun sanitizeMessage(raw: String): String {
+        return raw
+            .replace(Regex("key=[a-zA-Z0-9_\\-]+"), "key=REDACTED")
+            .replace(Regex("Bearer\\s+[a-zA-Z0-9_\\-\\.]+"), "Bearer REDACTED")
+            .replace(Regex("x-goog-api-key:\\s*[a-zA-Z0-9_\\-]+"), "x-goog-api-key: REDACTED")
+    }
+
     private fun parseErrorMessageFromBody(body: String): String {
         return try {
             val obj = JSONObject(body)
             val error = obj.optJSONObject("error")
-            error?.optString("message") ?: "Unknown error"
+            val msg = error?.optString("message") ?: "Unknown error"
+            sanitizeMessage(msg)
         } catch (_: Exception) {
             "Unknown response"
         }

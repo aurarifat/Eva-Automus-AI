@@ -78,20 +78,24 @@ The application uses Jetpack Navigation Compose with a persistent bottom bar acr
 - JDK 17 or higher
 - Android SDK with platform tools installed (API 36)
 
-### Build Debug APK
-Run the following command from the project root:
+### Build with Gradle Wrapper
 ```bash
-gradle :app:assembleDebug
-```
-The output APK is generated at:
-```
-app/build/outputs/apk/debug/app-debug.apk
+# Build Debug APK
+./gradlew assembleDebug
+
+# Build Release APK
+./gradlew assembleRelease
+
+# Run Unit and Robolectric Tests
+./gradlew testDebugUnitTest
 ```
 
-### Run Unit and Robolectric Tests
-```bash
-gradle :app:testDebugUnitTest
-```
+The output APKs are located at:
+- `app/build/outputs/apk/debug/app-debug.apk`
+- `app/build/outputs/apk/release/app-release.apk`
+
+### 🚀 Automated GitHub Releases
+Every push to `main` / `master` triggers the **Android CI/CD & GitHub Release** workflow (`.github/workflows/android.yml`). It automatically runs all unit tests, compiles both **Debug** and **Release** APKs, computes SHA-256 cryptographic hashes, and publishes them as downloadable assets directly onto the repository's **GitHub Releases** page with source code `.zip` and `.tar.gz` archives.
 
 ---
 

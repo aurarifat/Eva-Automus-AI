@@ -45,6 +45,32 @@ import com.evai.rifatcoder.data.security.SecureConfigStorage
 import com.evai.rifatcoder.ui.components.EvaTopBar
 import com.evai.rifatcoder.ui.theme.EvaTheme
 
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import com.evai.rifatcoder.data.database.EvaDatabase
+import com.evai.rifatcoder.data.memory.MemoryPreferencesRepository
+import com.evai.rifatcoder.data.repository.RealConversationRepository
+import com.evai.rifatcoder.data.repository.RealMemoryRepository
+import com.evai.rifatcoder.data.security.PermissionItem
+import com.evai.rifatcoder.data.security.SystemPermissionManager
+import com.evai.rifatcoder.ui.automation.AutomationCoordinator
+import kotlinx.coroutines.launch
+
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -52,12 +78,36 @@ fun SettingsScreen(
     onNavigateToVoiceSettings: () -> Unit = {},
     onNavigateToAutomation: () -> Unit = {},
     onNavigateToEdgeGlow: () -> Unit = {},
+    onNavigateToMemory: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val storage = remember { SecureConfigStorage(context) }
     val activeProvider = storage.getActiveProvider()
     val hasKey = storage.hasApiKey(activeProvider)
     val status = storage.getProviderStatus(activeProvider)
+
+    // Real Memory Repository
+    val memoryRepo = remember {
+        RealMemoryRepository(
+            EvaDatabase.getInstance(context),
+            MemoryPreferencesRepository(context)
+        )
+    }
+    val isMemoryEnabled by memoryRepo.isMemoryEnabledFlow.collectAsState()
+    val confirmedMemoriesCount by memoryRepo.countConfirmedMemories().collectAsState(initial = 0)
+
+    // Real Permission Auditor
+    val permissionManager = remember { SystemPermissionManager(context) }
+    var auditedPermissions by remember { mutableStateOf(permissionManager.auditAllPermissions()) }
+    val grantedCount = auditedPermissions.count { it.isGranted }
+    val totalPermCount = auditedPermissions.size
+
+    // Dialog States
+    var showPermissionsDialog by remember { mutableStateOf(false) }
+    var showDataPrivacyDialog by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
+    var feedbackMessage by remember { mutableStateOf<String?>(null) }
 
     val (aiStatusLevel, aiStatusLabel) = when {
         status == ProviderConnectionStatus.CONNECTED -> 
@@ -160,29 +210,50 @@ fun SettingsScreen(
             SettingsCategoryCard(
                 icon = Icons.Default.Lock,
                 title = "Memory & Privacy",
-                description = "Retention windows, local database encryption, memory inspection, and wipe.",
-                status = EvaStatusLevel.NotConfigured,
-                statusLabel = "Not Configured",
+                description = "Inspect confirmed memories, review AI suggestions, and manage retention.",
+                status = if (isMemoryEnabled) EvaStatusLevel.Available else EvaStatusLevel.Disabled,
+                statusLabel = if (isMemoryEnabled) "$confirmedMemoriesCount Confirmed" else "Disabled",
+                onClick = onNavigateToMemory,
+                testTag = "settings_memory_privacy_card",
             )
 
             Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
 
             SettingsCategoryCard(
-                icon = Icons.Default.VpnKey,
-                title = "Permissions",
-                description = "Microphone access, post notifications, foreground service, accessibility overlay.",
-                status = EvaStatusLevel.NotConfigured,
-                statusLabel = "Not Requested",
+                icon = Icons.Default.Shield,
+                title = "Permission Audit",
+                description = "Audit all 17 system permissions, review rationales, and manage Android settings.",
+                status = if (grantedCount == totalPermCount) EvaStatusLevel.Available else EvaStatusLevel.InProgress,
+                statusLabel = "$grantedCount / $totalPermCount Granted",
+                onClick = {
+                    auditedPermissions = permissionManager.auditAllPermissions()
+                    showPermissionsDialog = true
+                },
+                testTag = "settings_permissions_audit_card",
             )
 
             Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
 
             SettingsCategoryCard(
-                icon = Icons.Default.Extension,
-                title = "Integrations",
-                description = "External connectors: Telegram bot, Gmail automated actions, custom webhooks.",
-                status = EvaStatusLevel.Disabled,
-                statusLabel = "Inactive",
+                icon = Icons.Default.Security,
+                title = "Data Management & Wipe",
+                description = "Clear conversation history, purge memories, clear automation logs, and reset credentials.",
+                status = EvaStatusLevel.Available,
+                statusLabel = "Manage",
+                onClick = { showDataPrivacyDialog = true },
+                testTag = "settings_data_wipe_card",
+            )
+
+            Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
+
+            SettingsCategoryCard(
+                icon = Icons.Default.Policy,
+                title = "Privacy Disclosure & Architecture",
+                description = "Local-first storage, AES-256 Keystore encryption, zero background telemetry disclosure.",
+                status = EvaStatusLevel.Available,
+                statusLabel = "Verified",
+                onClick = { showPrivacyPolicyDialog = true },
+                testTag = "settings_privacy_policy_card",
             )
 
             Spacer(modifier = Modifier.height(EvaTheme.spacing.standard))
@@ -204,6 +275,235 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(EvaTheme.spacing.large))
+        }
+
+        // ==========================================
+        // 1. PERMISSIONS AUDIT DIALOG
+        // ==========================================
+        if (showPermissionsDialog) {
+            AlertDialog(
+                onDismissRequest = { showPermissionsDialog = false },
+                title = {
+                    Text(
+                        text = "System Permissions Audit",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Audited $grantedCount granted out of $totalPermCount system permissions. EVA AI operates under a least-privilege security model.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = EvaTheme.extendedColors.textSecondary),
+                        )
+                        Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
+
+                        LazyColumn(modifier = Modifier.height(340.dp)) {
+                            items(auditedPermissions) { perm ->
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = EvaTheme.spacing.extraSmall)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = perm.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = EvaTheme.extendedColors.textPrimary,
+                                            ),
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        EvaStatusIndicator(
+                                            status = if (perm.isGranted) EvaStatusLevel.Available else EvaStatusLevel.NotConfigured,
+                                            customLabel = if (perm.isGranted) "Allowed" else "Pending",
+                                            showBorder = false,
+                                        )
+                                    }
+                                    Text(
+                                        text = perm.description,
+                                        style = MaterialTheme.typography.bodySmall.copy(color = EvaTheme.extendedColors.textSecondary),
+                                    )
+                                    if (!perm.isGranted) {
+                                        Spacer(modifier = Modifier.height(EvaTheme.spacing.extraSmall))
+                                        OutlinedButton(
+                                            onClick = {
+                                                permissionManager.openSpecialPermissionSettings(perm.id)
+                                                showPermissionsDialog = false
+                                            },
+                                            modifier = Modifier.height(32.dp),
+                                        ) {
+                                            Text("Open Settings", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(top = EvaTheme.spacing.extraSmall),
+                                        color = EvaTheme.extendedColors.borderSubtle,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPermissionsDialog = false }) {
+                        Text("Close")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        permissionManager.openSpecialPermissionSettings("")
+                        showPermissionsDialog = false
+                    }) {
+                        Text("App Details")
+                    }
+                }
+            )
+        }
+
+        // ==========================================
+        // 2. DATA MANAGEMENT & WIPE DIALOG
+        // ==========================================
+        if (showDataPrivacyDialog) {
+            AlertDialog(
+                onDismissRequest = { showDataPrivacyDialog = false },
+                title = {
+                    Text(
+                        text = "Data Management & Privacy",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "EVA AI stores conversations and personal memories strictly in local on-device SQLite databases. Use the actions below to securely clear local data.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = EvaTheme.extendedColors.textSecondary),
+                        )
+                        Spacer(modifier = Modifier.height(EvaTheme.spacing.standard))
+
+                        // Clear Conversations
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val repo = RealConversationRepository(EvaDatabase.getInstance(context))
+                                    repo.clearAllConversations()
+                                    showDataPrivacyDialog = false
+                                    feedbackMessage = "All conversation history has been permanently cleared."
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = EvaTheme.extendedColors.surfaceCard),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Clear All Conversation History", color = EvaTheme.extendedColors.error)
+                        }
+
+                        Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
+
+                        // Clear Memories
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    memoryRepo.deleteAllMemories()
+                                    showDataPrivacyDialog = false
+                                    feedbackMessage = "All personal memories have been purged."
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = EvaTheme.extendedColors.surfaceCard),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Purge Saved Memories", color = EvaTheme.extendedColors.error)
+                        }
+
+                        Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
+
+                        // Clear Automation History
+                        Button(
+                            onClick = {
+                                AutomationCoordinator(context).clearHistory()
+                                showDataPrivacyDialog = false
+                                feedbackMessage = "Task automation execution history cleared."
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = EvaTheme.extendedColors.surfaceCard),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Clear Task Execution History", color = EvaTheme.extendedColors.textPrimary)
+                        }
+
+                        Spacer(modifier = Modifier.height(EvaTheme.spacing.small))
+
+                        // Wipe AI Credentials
+                        Button(
+                            onClick = {
+                                storage.clearGeminiApiKey()
+                                storage.clearOmniRouteApiKey()
+                                showDataPrivacyDialog = false
+                                feedbackMessage = "Stored API keys wiped from Android KeyStore."
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = EvaTheme.extendedColors.surfaceCard),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Wipe Stored API Credentials", color = EvaTheme.extendedColors.error)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showDataPrivacyDialog = false }) {
+                        Text("Done")
+                    }
+                }
+            )
+        }
+
+        // ==========================================
+        // 3. PRIVACY DISCLOSURE & ARCHITECTURE DIALOG
+        // ==========================================
+        if (showPrivacyPolicyDialog) {
+            AlertDialog(
+                onDismissRequest = { showPrivacyPolicyDialog = false },
+                title = {
+                    Text(
+                        text = "EVA AI Privacy Architecture",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = "• Local-First Data Storage:\nAll chat sessions, personal memory vectors, and task logs are persisted solely on your device within an encrypted private Room database.\n\n" +
+                                    "• Android KeyStore Encryption:\nGemini and OmniRoute API credentials are encrypted with AES-256-GCM. Secret keys never leave your device or appear in logcat.\n\n" +
+                                    "• Incognito Mode Isolation:\nWhen Incognito mode is active, conversation turns are never saved to disk and personal memory extraction is completely disabled.\n\n" +
+                                    "• Accessibility Field Protection:\nPassword fields, PIN codes, OTPs, and credential inputs are strictly masked and never read or exposed.\n\n" +
+                                    "• Non-Intrusive Edge Glow:\nThe four-side edge glow window uses touch-passthrough flags (FLAG_NOT_TOUCHABLE), ensuring zero tapjacking and zero UI interference.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = EvaTheme.extendedColors.textSecondary),
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showPrivacyPolicyDialog = false }) {
+                        Text("Understood")
+                    }
+                }
+            )
+        }
+
+        // Feedback Snackbar / Notice Dialog
+        if (feedbackMessage != null) {
+            AlertDialog(
+                onDismissRequest = { feedbackMessage = null },
+                title = { Text("Privacy Action Completed") },
+                text = { Text(feedbackMessage ?: "") },
+                confirmButton = {
+                    TextButton(onClick = { feedbackMessage = null }) {
+                        Text("OK")
+                    }
+                }
+            )
         }
     }
 }

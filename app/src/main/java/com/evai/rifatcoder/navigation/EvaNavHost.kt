@@ -113,6 +113,7 @@ fun EvaNavHost(
                 onNavigateToVoiceSettings = { navController.navigate("voice_settings") },
                 onNavigateToAutomation = { navController.navigate("automation") },
                 onNavigateToEdgeGlow = { navController.navigate("edge_glow_settings") },
+                onNavigateToMemory = { navController.navigateToEvaDestination(EvaDestination.MEMORY) },
             )
         }
 

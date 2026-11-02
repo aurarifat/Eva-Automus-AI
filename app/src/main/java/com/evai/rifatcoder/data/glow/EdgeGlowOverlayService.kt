@@ -87,6 +87,7 @@ class EdgeGlowOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwne
     }
 
     private fun setupOverlayWindow() {
+        if (isViewAttached || overlayComposeView != null) return
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         val params = WindowManager.LayoutParams(
@@ -134,6 +135,11 @@ class EdgeGlowOverlayService : Service(), LifecycleOwner, SavedStateRegistryOwne
             ) { state, prefs ->
                 Pair(state, prefs)
             }.collect { (state, prefs) ->
+                // Security check: If overlay permission has been revoked by user or system, stop and clean up immediately
+                if (!canDrawOverlays(this@EdgeGlowOverlayService)) {
+                    stopSelf()
+                    return@collect
+                }
                 if (!prefs.isEnabled || !prefs.isSystemOverlayEnabled || !prefs.shouldGlowForState(state)) {
                     overlayComposeView?.visibility = View.GONE
                 } else {

@@ -3,6 +3,7 @@ package com.evai.rifatcoder.data.accessibility
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
 import com.evai.rifatcoder.domain.automation.AccessibleNode
+import com.evai.rifatcoder.domain.automation.AutomationSafetyGuard
 import java.util.Locale
 
 /**
@@ -91,9 +92,13 @@ class AccessibilityNodeInspector {
             false
         }
 
-        // Mask password text for privacy protection
-        val rawText = if (isPass) "••••••" else info.text?.toString()
-        val rawContentDesc = if (isPass) "Password Field" else info.contentDescription?.toString()
+        val isSensitive = isPass ||
+            AutomationSafetyGuard.isCredentialField(info.viewIdResourceName ?: "") ||
+            AutomationSafetyGuard.isCredentialField(info.contentDescription?.toString() ?: "")
+
+        // Strictly protect credentials: never read, expose, or extract text from password fields
+        val rawText = if (isSensitive) null else info.text?.toString()
+        val rawContentDesc = if (isSensitive) "Protected Credential Field" else info.contentDescription?.toString()
 
         return AccessibleNode(
             id = "${info.viewIdResourceName ?: "node"}_d${depth}_b${bounds.left}_${bounds.top}",
@@ -104,7 +109,7 @@ class AccessibilityNodeInspector {
             isClickable = info.isClickable,
             isScrollable = info.isScrollable,
             isEditable = info.isEditable,
-            isPassword = isPass,
+            isPassword = isSensitive,
             isEnabled = info.isEnabled,
             isFocused = info.isFocused,
             viewIdResourceName = info.viewIdResourceName,

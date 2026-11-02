@@ -368,6 +368,14 @@ class VoiceViewModel @JvmOverloads constructor(
         ttsManager.stop()
     }
 
+    /**
+     * Toggles incognito mode for voice conversations.
+     * When active, turns and memories are not written to persistent storage.
+     */
+    fun toggleIncognito(enabled: Boolean) {
+        _uiState.update { it.copy(isIncognito = enabled) }
+    }
+
     fun processAndSendPrompt(prompt: String) {
         val cleanPrompt = prompt.trim()
         if (cleanPrompt.isBlank()) return
@@ -393,8 +401,12 @@ class VoiceViewModel @JvmOverloads constructor(
             )
         }
 
-        viewModelScope.launch {
-            conversationRepository.saveUserTurn(convId, userMessage)
+        val isIncognito = _uiState.value.isIncognito
+
+        if (!isIncognito) {
+            viewModelScope.launch {
+                conversationRepository.saveUserTurn(convId, userMessage)
+            }
         }
 
         activeAiJob?.cancel()
@@ -421,7 +433,9 @@ class VoiceViewModel @JvmOverloads constructor(
                     content = replyText,
                     status = MessageStatus.Complete,
                 )
-                conversationRepository.saveAssistantTurn(convId, assistantMsg)
+                if (!isIncognito) {
+                    conversationRepository.saveAssistantTurn(convId, assistantMsg)
+                }
 
                 val prefs = preferencesRepository.getPreferences()
                 if (prefs.ttsEnabled) {
@@ -517,7 +531,7 @@ class VoiceViewModel @JvmOverloads constructor(
             }
 
             // Standard AI Chat Engine flow with unified 3-layer context
-            val relevantMemories = if (memoryRepository.isMemoryEnabled()) {
+            val relevantMemories = if (!isIncognito && memoryRepository.isMemoryEnabled()) {
                 memoryRepository.getRelevantMemoriesForContext(cleanPrompt)
             } else {
                 emptyList()
@@ -527,7 +541,7 @@ class VoiceViewModel @JvmOverloads constructor(
                 conversationHistory = listOf(userMessage),
                 userPrompt = cleanPrompt,
                 relevantMemories = relevantMemories,
-                isIncognito = false,
+                isIncognito = isIncognito,
                 userPreferredLanguage = _uiState.value.activeLanguage.displayName,
             )
 
@@ -549,7 +563,9 @@ class VoiceViewModel @JvmOverloads constructor(
                         status = MessageStatus.Complete,
                     )
 
-                    conversationRepository.saveAssistantTurn(convId, assistantMsg)
+                    if (!isIncognito) {
+                        conversationRepository.saveAssistantTurn(convId, assistantMsg)
+                    }
                     centralStateManager.setAssistantResponse(replyText)
 
                     val prefs = preferencesRepository.getPreferences()

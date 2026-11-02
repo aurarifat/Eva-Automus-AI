@@ -150,6 +150,19 @@ class AutomationCoordinator(
                     description = step.description,
                 )
 
+                // Verify service availability for accessibility-dependent actions
+                if (step.action is AutomationAction.ClickNode ||
+                    step.action is AutomationAction.HoldNode ||
+                    step.action is AutomationAction.Scroll ||
+                    step.action is AutomationAction.InputText ||
+                    step.action is AutomationAction.InspectScreen) {
+                    if (EvaAccessibilityService.instance == null) {
+                        isFailed = true
+                        failureMessage = "Accessibility service was disabled or disconnected. Automation halted for safety."
+                        break
+                    }
+                }
+
                 // Execute action
                 var attempt = 0
                 var stepResult: StepExecutionResult? = null
@@ -255,6 +268,18 @@ class AutomationCoordinator(
                 currentActionDescription = "Task cancelled by user.",
                 pendingConfirmationPrompt = null,
                 pendingConfirmationReason = null,
+            )
+        }
+    }
+
+    /**
+     * Clears all automation execution history for privacy.
+     */
+    fun clearHistory() {
+        _uiState.update {
+            it.copy(
+                taskHistory = emptyList(),
+                lastExecutionReport = null,
             )
         }
     }

@@ -19,7 +19,7 @@ object AutomationSafetyGuard {
     )
 
     private val CREDENTIAL_PATTERNS = Regex(
-        "\\b(password|passwd|otp|one[- ]?time[- ]?pin|pin code|security code|cvv|cvc|passcode|secret)\\b",
+        "\\b(password|passwd|otp|one[-_ ]?time[-_ ]?pin|pin[-_ ]?code|security[-_ ]?code|cvv|cvc|passcode|secret)\\b",
         RegexOption.IGNORE_CASE
     )
 
@@ -128,7 +128,8 @@ object AutomationSafetyGuard {
      * Checks if a text label represents a credential field.
      */
     fun isCredentialField(text: String): Boolean {
-        return CREDENTIAL_PATTERNS.containsMatchIn(text)
+        val normalized = text.replace('_', ' ').replace('-', ' ')
+        return CREDENTIAL_PATTERNS.containsMatchIn(normalized)
     }
 
     /**

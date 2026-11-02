@@ -43,8 +43,8 @@ class AiToolRegistry(
         AiTool("play_store_check_app", listOf("install app", "play store", "download app"), "Open Play Store for target application", ToolCategory.SCREEN_APPS_MEDIA),
 
         // Section C: Communication & Contacts
-        AiTool("phone_dial", listOf("call ", "dial "), "Open phone dialer with number", ToolCategory.COMMUNICATION),
-        AiTool("send_to_sms_message", listOf("send sms", "send text", "text message"), "Compose SMS message", ToolCategory.COMMUNICATION),
+        AiTool("phone_dial", listOf("call ", "dial "), "Open phone dialer with number", ToolCategory.COMMUNICATION, isSensitive = true),
+        AiTool("send_to_sms_message", listOf("send sms", "send text", "text message"), "Compose SMS message", ToolCategory.COMMUNICATION, isSensitive = true),
         AiTool("contacts_list", listOf("contacts", "list contacts", "find contact"), "Audit system contacts", ToolCategory.COMMUNICATION),
 
         // Section D: Skills & Plugins
@@ -52,7 +52,7 @@ class AiToolRegistry(
         AiTool("add_skill", listOf("add skill", "install skill"), "Register a custom skill", ToolCategory.SKILLS_AND_PLUGINS),
 
         // Section E: Mail
-        AiTool("send email", listOf("send email", "email", "compose email"), "Open email composer", ToolCategory.MAIL),
+        AiTool("send email", listOf("send email", "email", "compose email"), "Open email composer", ToolCategory.MAIL, isSensitive = true),
 
         // Section F: Tasks, Workflows & Shortcuts
         AiTool("workflow_list", listOf("workflows", "list workflows"), "List automated workflows", ToolCategory.TASKS_AND_WORKFLOWS),
@@ -68,7 +68,7 @@ class AiToolRegistry(
         // Section I: Memos & To-Dos
         AiTool("add to-do", listOf("add todo", "add to-do", "remind me to", "todo add"), "Save a to-do item", ToolCategory.MEMOS),
         AiTool("view to-dos", listOf("view todos", "my todos", "todo list", "show todos"), "List saved to-dos", ToolCategory.MEMOS),
-        AiTool("delete to-do", listOf("delete todo", "clear todo"), "Remove a to-do item", ToolCategory.MEMOS),
+        AiTool("delete to-do", listOf("delete todo", "clear todo"), "Remove a to-do item", ToolCategory.MEMOS, isSensitive = true),
     )
 
     fun getAllTools(): List<AiTool> = tools
@@ -82,9 +82,42 @@ class AiToolRegistry(
         }
     }
 
-    suspend fun executeTool(tool: AiTool, params: Map<String, String> = emptyMap()): ToolExecutionResult {
+    suspend fun executeTool(
+        tool: AiTool,
+        params: Map<String, String> = emptyMap(),
+        skipConfirmation: Boolean = false,
+    ): ToolExecutionResult {
+        // Enforce parameter sanitization: block unsafe shell or script injection characters
+        for ((key, value) in params) {
+            if (value.contains(";") || value.contains("&&") || value.contains("||") || value.contains("`") || value.contains("\$(")) {
+                val err = "Parameter '$key' contains disallowed characters. Command rejected for security."
+                EdgeGlowStateHolder.onTaskFailed(err)
+                return ToolExecutionResult(tool.name, false, err)
+            }
+        }
+
+        // Enforce risk-based confirmation for sensitive tools
+        if (tool.isSensitive && !skipConfirmation) {
+            val reason = "Executing '${tool.name}' requires explicit user authorization."
+            EdgeGlowStateHolder.onTaskWaitingForConfirmation(tool.name, reason)
+            return ToolExecutionResult(
+                toolName = tool.name,
+                isSuccess = false,
+                message = "Confirmation required: \"${tool.description}\" has consequential effects. Please confirm to proceed.",
+            )
+        }
+
         EdgeGlowStateHolder.onTaskExecuting(1, 1, tool.description)
-        val result = executor.execute(tool.name, params)
+
+        // Enforce execution timeout
+        val result = kotlinx.coroutines.withTimeoutOrNull(com.evai.rifatcoder.domain.automation.AutomationSafetyGuard.MAX_TASK_TIMEOUT_MS) {
+            executor.execute(tool.name, params)
+        } ?: ToolExecutionResult(
+            toolName = tool.name,
+            isSuccess = false,
+            message = "Task execution timed out after ${com.evai.rifatcoder.domain.automation.AutomationSafetyGuard.MAX_TASK_TIMEOUT_MS / 1000}s.",
+        )
+
         if (result.isSuccess) {
             EdgeGlowStateHolder.onTaskSuccess(result.message)
         } else {

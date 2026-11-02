@@ -156,11 +156,19 @@ class GeminiProviderAdapter(
         }
     }
 
+    private fun sanitizeMessage(raw: String): String {
+        return raw
+            .replace(Regex("key=[a-zA-Z0-9_\\-]+"), "key=REDACTED")
+            .replace(Regex("Bearer\\s+[a-zA-Z0-9_\\-\\.]+"), "Bearer REDACTED")
+            .replace(Regex("x-goog-api-key:\\s*[a-zA-Z0-9_\\-]+"), "x-goog-api-key: REDACTED")
+    }
+
     private fun parseErrorMessageFromBody(body: String): String {
         return try {
             val obj = JSONObject(body)
             val error = obj.optJSONObject("error")
-            error?.optString("message") ?: "Unknown error"
+            val msg = error?.optString("message") ?: "Unknown error"
+            sanitizeMessage(msg)
         } catch (_: Exception) {
             "Unknown response"
         }
