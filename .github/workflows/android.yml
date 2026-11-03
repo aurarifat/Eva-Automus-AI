@@ -92,6 +92,21 @@ jobs:
           echo "Keystores ready."
           ls -la *.keystore *.jks 2>/dev/null || true
 
+      - name: Cache & Pre-fetch Robolectric Android JAR
+        run: |
+          ROBO_DIR="${HOME}/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7"
+          mkdir -p "$ROBO_DIR"
+          JAR_PATH="$ROBO_DIR/android-all-instrumented-16-robolectric-13921718-i7.jar"
+          if [ ! -s "$JAR_PATH" ]; then
+            echo "Pre-fetching Robolectric Android 16 JAR from Google mirror (avoids Maven Central HTTP 429 rate limit)..."
+            curl -fSL --retry 5 --retry-delay 2 \
+              "https://maven-central-eu.storage-download.googleapis.com/maven2/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7/android-all-instrumented-16-robolectric-13921718-i7.jar" \
+              -o "$JAR_PATH"
+            echo "Robolectric JAR size: $(ls -lh "$JAR_PATH" | awk '{print $5}')"
+          else
+            echo "Robolectric JAR already present in local repository."
+          fi
+
       - name: Run Unit & Robolectric Tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
 

@@ -23,6 +23,7 @@ app/build/
 /captures
 .externalNativeBuild
 .cxx
+.robolectric-cache/
 
 # Signing keys & secrets
 *.jks

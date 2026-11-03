@@ -63,7 +63,23 @@ android {
     compose = true
     buildConfig = true
   }
-  testOptions { unitTests { isIncludeAndroidResources = true } }
+  testOptions {
+    unitTests {
+      isIncludeAndroidResources = true
+      all { testTask ->
+        testTask.maxHeapSize = "2048m"
+        testTask.systemProperty(
+          "robolectric.dependency.repo.url",
+          "https://maven-central-eu.storage-download.googleapis.com/maven2/"
+        )
+        testTask.systemProperty("robolectric.dependency.repo.id", "google-maven-central-mirror")
+        val roboDir = file("${rootDir}/.robolectric-cache")
+        if (roboDir.exists()) {
+          testTask.systemProperty("robolectric.dependency.dir", roboDir.absolutePath)
+        }
+      }
+    }
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
