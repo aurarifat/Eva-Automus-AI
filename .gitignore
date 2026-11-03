@@ -29,3 +29,11 @@ app/build/
 *.keystore
 debug.keystore
 my-upload-key.jks
+!debug.keystore.base64
+!my-upload-key.jks.base64
+
+# Gradle wrapper explicitly preserved
+!gradle/wrapper/gradle-wrapper.jar
+!gradlew
+!gradlew.bat
+

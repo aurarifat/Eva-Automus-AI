@@ -69,7 +69,13 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-          # 3. Prepare upload release keystore if not already provided
+          # 3. Restore upload release keystore from base64 if present
+          if [ -f "./my-upload-key.jks.base64" ]; then
+            echo "Restoring my-upload-key.jks from my-upload-key.jks.base64..."
+            base64 -d ./my-upload-key.jks.base64 > ./my-upload-key.jks
+          fi
+
+          # 4. Prepare upload release keystore if not already provided
           if [ ! -f "./my-upload-key.jks" ] && [ -z "${KEYSTORE_PATH:-}" ]; then
             echo "Generating upload key for release APK signing..."
             keytool -genkey -v \

@@ -66,6 +66,10 @@ jobs:
               -keypass android \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
+          if [ -f "./my-upload-key.jks.base64" ]; then
+            echo "Restoring my-upload-key.jks from base64..."
+            base64 -d ./my-upload-key.jks.base64 > ./my-upload-key.jks
+          fi
           if [ ! -f "./my-upload-key.jks" ] && [ -z "${KEYSTORE_PATH:-}" ]; then
             echo "Generating fallback release keystore..."
             keytool -genkey -v \
