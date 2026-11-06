@@ -67,14 +67,21 @@ android {
     unitTests {
       isIncludeAndroidResources = true
       all { testTask ->
-        testTask.maxHeapSize = "2048m"
+        testTask.maxHeapSize = "1024m"
+        testTask.maxParallelForks = 2
         testTask.systemProperty(
           "robolectric.dependency.repo.url",
           "https://maven-central-eu.storage-download.googleapis.com/maven2/"
         )
         testTask.systemProperty("robolectric.dependency.repo.id", "google-maven-central-mirror")
-        val roboDir = file("${rootDir}/.robolectric-cache")
-        if (roboDir.exists()) {
+        val possibleDirs = listOf(
+          file("/home/appuser/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7"),
+          file("/root/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7"),
+          file("${System.getProperty("user.home")}/.m2/repository/org/robolectric/android-all-instrumented/16-robolectric-13921718-i7"),
+          file("${rootDir}/.robolectric-cache")
+        )
+        val roboDir = possibleDirs.firstOrNull { it.exists() && it.listFiles()?.any { f -> f.name.endsWith(".jar") } == true }
+        if (roboDir != null) {
           testTask.systemProperty("robolectric.dependency.dir", roboDir.absolutePath)
         }
       }

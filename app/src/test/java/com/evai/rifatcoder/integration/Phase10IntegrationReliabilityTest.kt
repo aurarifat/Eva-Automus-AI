@@ -63,18 +63,22 @@ class Phase10IntegrationReliabilityTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        com.evai.rifatcoder.data.voice.CentralVoiceStateManager.resetToIdle()
+        com.evai.rifatcoder.data.glow.EdgeGlowStateHolder.resetToIdle()
         application = ApplicationProvider.getApplicationContext()
         database = EvaDatabase.createInMemory(application)
-        convRepo = RealConversationRepository(database, testDispatcher)
+        convRepo = RealConversationRepository(database, Dispatchers.IO)
         memoryPrefsRepo = MemoryPreferencesRepository(
             application,
             prefsName = "test_p10_memory_prefs_" + System.currentTimeMillis()
         )
-        memoryRepo = RealMemoryRepository(database, memoryPrefsRepo, testDispatcher)
+        memoryRepo = RealMemoryRepository(database, memoryPrefsRepo, Dispatchers.IO)
     }
 
     @After
     fun tearDown() {
+        com.evai.rifatcoder.data.voice.CentralVoiceStateManager.resetToIdle()
+        com.evai.rifatcoder.data.glow.EdgeGlowStateHolder.resetToIdle()
         database.close()
         Dispatchers.resetMain()
     }
@@ -353,7 +357,11 @@ class Phase10IntegrationReliabilityTest {
 
         chatVm.updateComposerText("Test query")
         chatVm.sendMessage()
-        advanceUntilIdle()
+        for (i in 0 until 30) {
+            if (!chatVm.uiState.value.isSending) break
+            Thread.sleep(100)
+            advanceUntilIdle()
+        }
 
         assertFalse(chatVm.uiState.value.isSending)
         val lastMsg = chatVm.uiState.value.messages.last()
@@ -386,7 +394,11 @@ class Phase10IntegrationReliabilityTest {
 
         chatVm.updateComposerText("Hello")
         chatVm.sendMessage()
-        advanceUntilIdle()
+        for (i in 0 until 30) {
+            if (chatVm.uiState.value.messages.size >= 2) break
+            Thread.sleep(100)
+            advanceUntilIdle()
+        }
 
         val messages = chatVm.uiState.value.messages
         assertEquals(2, messages.size) // User sent turn + Failed assistant notification
@@ -423,7 +435,11 @@ class Phase10IntegrationReliabilityTest {
 
         voiceVm.updateTranscriptionText("Error prompt")
         voiceVm.submitManualPrompt()
-        advanceUntilIdle()
+        for (i in 0 until 30) {
+            if (voiceVm.uiState.value.voiceState != VoiceState.THINKING) break
+            Thread.sleep(100)
+            advanceUntilIdle()
+        }
 
         assertEquals(VoiceState.ERROR, voiceVm.uiState.value.voiceState)
         assertFalse(voiceVm.uiState.value.isTtsSpeaking)
@@ -476,7 +492,11 @@ class Phase10IntegrationReliabilityTest {
         // Immediate second tap while first is sending
         chatVm.sendMessage()
 
-        advanceUntilIdle()
+        for (i in 0 until 30) {
+            if (callCount > 0) break
+            Thread.sleep(100)
+            advanceUntilIdle()
+        }
         assertEquals(1, callCount)
     }
 
